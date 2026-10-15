@@ -22,9 +22,15 @@
         <label for="password">Password</label>
         <input id="password" name="password" type="password" autocomplete="current-password" minlength="10" maxlength="128" required>
         <small>Use 10–128 characters.</small>
+        <div id="manager-code-field" hidden>
+          <label for="manager-code">Manager verification code</label>
+          <input id="manager-code" name="verification_code" type="password" autocomplete="off" maxlength="128" disabled>
+          <small>Enter the code provided to authorised managers.</small>
+        </div>
         <button id="auth-submit" type="submit">Log in</button>
       </form>
       <button id="auth-toggle" class="text-button" type="button">New here? Create an account</button>
+      <button id="manager-register" class="text-button" type="button">Create manager account</button>
     </section>
     <div id="dashboard" hidden>
       <div class="page-heading"><p class="eyebrow">EXPENSE MANAGEMENT</p><h1>Your expense claims</h1><p>Submit a claim and follow its progress.</p></div>
@@ -50,6 +56,12 @@
           <div id="claims" aria-live="polite"></div>
         </section>
       </div>
+      <section id="manager-dashboard" class="card manager-section" aria-labelledby="reviews-title" hidden>
+        <div class="section-heading"><h2 id="reviews-title">Manager approval dashboard</h2><button id="refresh-reviews" class="secondary" type="button">Refresh queue</button></div>
+        <p>Review submitted claims from other users. Approval and rejection are final. Your own claims are excluded.</p>
+        <p id="reviews-empty" hidden>No claims awaiting your review.</p>
+        <div id="reviews" aria-live="polite"></div>
+      </section>
     </div>
     <noscript><p>This application needs JavaScript enabled to submit and view expense claims.</p></noscript>
   </main>

@@ -8,6 +8,7 @@ from app.main import app
 @pytest.fixture(autouse=True)
 def isolated_database(tmp_path, monkeypatch):
     monkeypatch.setattr(database, "DB_PATH", tmp_path / "expenses.db")
+    monkeypatch.delenv("EXPENSE_MANAGER_CODE", raising=False)
 
 
 @pytest.fixture

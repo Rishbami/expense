@@ -1,5 +1,6 @@
 const el = (id) => document.getElementById(id);
 let registering = false;
+let registeringManager = false;
 let user = null;
 
 function message(text, error = false) {
@@ -14,9 +15,13 @@ function showUser(value) {
   el('dashboard').hidden = !user;
   el('account').hidden = !user;
   el('username').textContent = user ? user.username : '';
+  el('manager-dashboard').hidden = !user?.is_manager;
+  el('reviews').replaceChildren();
+  el('reviews-empty').hidden = true;
   if (!user) {
     el('claims').replaceChildren();
     el('expense-form').reset();
+    setAuthMode('login');
   }
 }
 
@@ -46,7 +51,9 @@ function node(tag, text, className) {
 }
 
 async function loadClaims() {
+  const account = user;
   const claims = await api('/api/expenses');
+  if (user !== account) return;
   el('claims').replaceChildren();
   el('empty').hidden = claims.length > 0;
   for (const claim of claims) {
@@ -60,6 +67,56 @@ async function loadClaims() {
   }
 }
 
+async function loadReviews() {
+  if (!user?.is_manager) return;
+  const account = user;
+  // Clear stale details and actions while fetching fresh permissions and claims.
+  el('reviews').replaceChildren();
+  el('reviews-empty').hidden = true;
+  const claims = await api('/api/reviews');
+  if (user !== account) return;
+  for (const claim of claims) {
+    const article = node('article', '', 'claim');
+    const heading = node('div', '', 'claim-heading');
+    heading.append(node('h3', claim.description), node('strong', `£${claim.amount}`));
+    const submitted = new Date(claim.submitted_at).toLocaleString('en-GB');
+    article.append(heading, node('p', `Claim #${claim.id} · Claimant: ${claim.claimant_username} · Expense date: ${claim.expense_date} · Submitted: ${submitted}`, 'claim-meta'), node('span', claim.status, 'badge'));
+    const actions = node('div', '', 'review-actions');
+    for (const status of ['Approved', 'Rejected']) {
+      const button = node('button', status === 'Approved' ? 'Approve' : 'Reject', status === 'Rejected' ? 'reject' : '');
+      button.type = 'button';
+      button.addEventListener('click', () => {
+        if (!window.confirm(`${status === 'Approved' ? 'Approve' : 'Reject'} claim #${claim.id} from ${claim.claimant_username} for £${claim.amount}? This decision is final.`)) return;
+        const buttons = [...actions.querySelectorAll('button')];
+        buttons.forEach((item) => { item.disabled = true; });
+        busy(button, async () => {
+          message('');
+          try {
+            await api(`/api/reviews/${claim.id}`, 'POST', { status });
+          } catch (error) {
+            // A competing manager may have decided this claim already.
+            try { await loadReviews(); } catch { /* Preserve the decision error. */ }
+            throw error;
+          }
+          article.remove();
+          message(`Claim #${claim.id} ${status.toLowerCase()}.`);
+          try { await loadReviews(); }
+          catch { message(`Claim #${claim.id} ${status.toLowerCase()}. Refresh the queue to see the latest claims.`); }
+        }).finally(() => buttons.forEach((item) => { item.disabled = false; }));
+      });
+      actions.append(button);
+    }
+    article.append(actions);
+    el('reviews').append(article);
+  }
+  el('reviews-empty').hidden = claims.length > 0;
+}
+
+async function loadDashboard() {
+  await loadClaims();
+  await loadReviews();
+}
+
 async function busy(button, action) {
   button.disabled = true;
   try { await action(); }
@@ -67,25 +124,35 @@ async function busy(button, action) {
   finally { button.disabled = false; }
 }
 
-el('auth-toggle').addEventListener('click', () => {
-  registering = !registering;
-  el('auth-title').textContent = registering ? 'Create your account' : 'Welcome back';
-  el('auth-copy').textContent = registering ? 'Keep your expense claims together in one place.' : 'Log in to submit expenses and track your claims.';
-  el('auth-submit').textContent = registering ? 'Create account' : 'Log in';
+function setAuthMode(mode) {
+  registering = mode !== 'login';
+  registeringManager = mode === 'manager';
+  el('auth-title').textContent = registeringManager ? 'Create manager account' : registering ? 'Create your account' : 'Welcome back';
+  el('auth-copy').textContent = registeringManager ? 'Verify your manager access to review expense claims.' : registering ? 'Keep your expense claims together in one place.' : 'Log in to submit expenses and track your claims.';
+  el('auth-submit').textContent = registeringManager ? 'Create manager account' : registering ? 'Create account' : 'Log in';
   el('auth-toggle').textContent = registering ? 'Already have an account? Log in' : 'New here? Create an account';
+  el('manager-register').hidden = registeringManager;
+  el('manager-code-field').hidden = !registeringManager;
+  el('manager-code').disabled = !registeringManager;
+  el('manager-code').required = registeringManager;
+  el('manager-code').value = '';
   el('password').autocomplete = registering ? 'new-password' : 'current-password';
   message('');
-});
+}
+
+el('auth-toggle').addEventListener('click', () => setAuthMode(registering ? 'login' : 'register'));
+el('manager-register').addEventListener('click', () => setAuthMode('manager'));
 
 el('auth-form').addEventListener('submit', (event) => {
   event.preventDefault();
   busy(el('auth-submit'), async () => {
     message('');
     const data = Object.fromEntries(new FormData(event.target));
-    const account = await api(`/api/auth/${registering ? 'register' : 'login'}`, 'POST', data);
+    const endpoint = registeringManager ? 'register-manager' : registering ? 'register' : 'login';
+    const account = await api(`/api/auth/${endpoint}`, 'POST', data);
     event.target.reset();
     showUser(account);
-    await loadClaims();
+    await loadDashboard();
   });
 });
 
@@ -106,6 +173,12 @@ el('refresh').addEventListener('click', () => busy(el('refresh'), async () => {
   message('');
   await loadClaims();
   message('Claim statuses are up to date.');
+}));
+
+el('refresh-reviews').addEventListener('click', () => busy(el('refresh-reviews'), async () => {
+  message('');
+  await loadReviews();
+  message('Review queue is up to date.');
 }));
 
 el('logout').addEventListener('click', () => busy(el('logout'), async () => {
@@ -134,7 +207,7 @@ async function start() {
     if (response.status === 401) { showUser(null); return; }
     if (!response.ok) throw new Error('Unable to load your account. Please reload the page.');
     showUser(await response.json());
-    await loadClaims();
+    await loadDashboard();
   } catch (error) {
     if (!user) showUser(null);
     message(error.message || 'Unable to connect. Please reload the page.', true);

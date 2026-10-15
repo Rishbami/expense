@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from .auth import router as auth_router
 from .database import init_db
 from .expenses import router as expenses_router
+from .reviews import router as reviews_router
 
 
 @asynccontextmanager
@@ -42,6 +43,7 @@ async def protect_origin(request: Request, call_next):
 
 app.include_router(auth_router)
 app.include_router(expenses_router)
+app.include_router(reviews_router)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 

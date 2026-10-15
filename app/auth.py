@@ -26,6 +26,14 @@ class Credentials(BaseModel):
         return value.lower()
 
 
+class ManagerRegistration(Credentials):
+    verification_code: str = Field(min_length=1, max_length=128)
+
+
+def user_response(user):
+    return {"id": user["id"], "username": user["username"], "is_manager": bool(user["is_manager"])}
+
+
 def hash_password(password, salt=None):
     salt = salt or secrets.token_hex(16)
     digest = hashlib.pbkdf2_hmac("sha256", password.encode(), bytes.fromhex(salt), ITERATIONS)
@@ -41,13 +49,19 @@ def current_user(request: Request):
     if token:
         with get_connection() as connection:
             user = connection.execute(
-                "SELECT users.id, users.username FROM sessions JOIN users ON users.id = sessions.user_id "
+                "SELECT users.id, users.username, users.is_manager FROM sessions JOIN users ON users.id = sessions.user_id "
                 "WHERE token_hash = ? AND expires_at > ?",
                 (token_hash(token), int(time.time())),
             ).fetchone()
         if user:
-            return dict(user)
+            return user_response(user)
     raise HTTPException(401, "Please log in to continue.")
+
+
+def current_manager(user=Depends(current_user)):
+    if not user["is_manager"]:
+        raise HTTPException(403, "Manager access is required.")
+    return user
 
 
 def create_session(response, user_id):
@@ -65,20 +79,32 @@ def create_session(response, user_id):
     )
 
 
-@router.post("/register", status_code=201)
-def register(credentials: Credentials, response: Response):
+def register_account(credentials, response, is_manager=False):
     password_hash = hash_password(credentials.password)
     try:
         with get_connection() as connection:
             cursor = connection.execute(
-                "INSERT INTO users (username, password_hash) VALUES (?, ?)",
-                (credentials.username, password_hash),
+                "INSERT INTO users (username, password_hash, is_manager) VALUES (?, ?, ?)",
+                (credentials.username, password_hash, int(is_manager)),
             )
             user_id = cursor.lastrowid
     except sqlite3.IntegrityError:
         raise HTTPException(409, "That username is already registered.")
     create_session(response, user_id)
-    return {"id": user_id, "username": credentials.username}
+    return {"id": user_id, "username": credentials.username, "is_manager": is_manager}
+
+
+@router.post("/register", status_code=201)
+def register(credentials: Credentials, response: Response):
+    return register_account(credentials, response)
+
+
+@router.post("/register-manager", status_code=201)
+def register_manager(credentials: ManagerRegistration, response: Response):
+    expected = os.environ.get("EXPENSE_MANAGER_CODE", "1234")
+    if not expected or not hmac.compare_digest(credentials.verification_code.encode(), expected.encode()):
+        raise HTTPException(403, "Incorrect manager verification code.")
+    return register_account(credentials, response, is_manager=True)
 
 
 @router.post("/login")
@@ -91,7 +117,7 @@ def login(credentials: Credentials, response: Response):
     if not hmac.compare_digest(hash_password(credentials.password, salt), stored_hash) or not user:
         raise HTTPException(401, "Incorrect username or password.")
     create_session(response, user["id"])
-    return {"id": user["id"], "username": user["username"]}
+    return user_response(user)
 
 
 @router.get("/me")

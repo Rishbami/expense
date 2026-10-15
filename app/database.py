@@ -54,5 +54,11 @@ def init_db():
             );
             CREATE INDEX IF NOT EXISTS expenses_user_id ON expenses(user_id);
             CREATE INDEX IF NOT EXISTS sessions_expiry ON sessions(expires_at);
-            UPDATE app_metadata SET value = '1' WHERE key = 'schema_version';
         """)
+        columns = {row["name"] for row in connection.execute("PRAGMA table_info(users)")}
+        if "is_manager" not in columns:
+            connection.execute(
+                "ALTER TABLE users ADD COLUMN is_manager INTEGER NOT NULL DEFAULT 0 "
+                "CHECK (is_manager IN (0, 1))"
+            )
+        connection.execute("UPDATE app_metadata SET value = '2' WHERE key = 'schema_version'")
