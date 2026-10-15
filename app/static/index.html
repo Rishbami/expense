@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Expense Claims</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <header><div class="header-inner"><a href="/" class="brand">Expense Claims</a><div id="account" hidden><span id="username"></span><button id="logout" class="secondary">Log out</button></div></div></header>
+  <main>
+    <div id="message" role="status" aria-live="polite" hidden></div>
+    <section id="auth" class="card auth-card" hidden>
+      <p class="eyebrow">YOUR EXPENSES, IN ONE PLACE</p>
+      <h1 id="auth-title">Welcome back</h1>
+      <p id="auth-copy">Log in to submit expenses and track your claims.</p>
+      <form id="auth-form">
+        <label for="login-username">Username</label>
+        <input id="login-username" name="username" autocomplete="username" minlength="3" maxlength="40" pattern="[a-zA-Z0-9_-]+" required aria-describedby="username-help">
+        <small id="username-help">3–40 letters, numbers, underscores or hyphens. Case insensitive.</small>
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" minlength="10" maxlength="128" required>
+        <small>Use 10–128 characters.</small>
+        <button id="auth-submit" type="submit">Log in</button>
+      </form>
+      <button id="auth-toggle" class="text-button" type="button">New here? Create an account</button>
+    </section>
+    <div id="dashboard" hidden>
+      <div class="page-heading"><p class="eyebrow">EXPENSE MANAGEMENT</p><h1>Your expense claims</h1><p>Submit a claim and follow its progress.</p></div>
+      <div class="layout">
+        <section class="card">
+          <h2>Submit an expense</h2>
+          <form id="expense-form">
+            <label for="description">Description</label>
+            <textarea id="description" name="description" maxlength="500" rows="3" placeholder="e.g. Train to client meeting" required></textarea>
+            <label for="expense-date">Expense date</label>
+            <input id="expense-date" name="expense_date" type="date" required aria-describedby="date-help">
+            <small id="date-help">Choose a date within the past calendar year, up to today.</small>
+            <label for="amount">Amount (GBP)</label>
+            <input id="amount" name="amount" type="number" min="0.01" max="999999.99" step="0.01" placeholder="0.00" required>
+            <small>Submitted claims cannot be edited.</small>
+            <button type="submit">Submit claim</button>
+          </form>
+        </section>
+        <section class="card claims-section" aria-labelledby="claims-title">
+          <div class="section-heading"><h2 id="claims-title">Submitted expenses</h2><button id="refresh" class="secondary">Refresh</button></div>
+          <p id="claims-help">Refresh to check for status updates. Newest claims appear first.</p>
+          <p id="empty" hidden>No claims yet. Submit your first expense to get started.</p>
+          <div id="claims" aria-live="polite"></div>
+        </section>
+      </div>
+    </div>
+    <noscript><p>This application needs JavaScript enabled to submit and view expense claims.</p></noscript>
+  </main>
+</body>
+</html>
